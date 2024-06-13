@@ -49,7 +49,7 @@ func CreateStock(w http.ResponseWriter, r *http.Request) {
 	err := json.NewDecoder(r.Body).Decode(&stock)
 
 	if err != nil {
-		log.Fatal("Unable to decode the request body. %v", err)
+		log.Fatalf("Unable to decode the request body. %v", err)
 	}
 
 	insertID := insertStock(stock)
