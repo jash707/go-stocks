@@ -49,99 +49,107 @@ func createConnection() *sql.DB {
 }
 
 func CreateStock(w http.ResponseWriter, r *http.Request) {
-	var stock models.Stock
+	if ProtectedHandler(w, r) {
+		var stock models.Stock
 
-	err := json.NewDecoder(r.Body).Decode(&stock)
+		err := json.NewDecoder(r.Body).Decode(&stock)
 
-	if err != nil {
-		log.Fatalf("Unable to decode the request body. %v", err)
+		if err != nil {
+			log.Fatalf("Unable to decode the request body. %v", err)
+		}
+
+		insertID := insertStock(stock)
+
+		res := response{
+			ID:      insertID,
+			Message: "Stock created successfully",
+		}
+
+		json.NewEncoder(w).Encode(res)
 	}
-
-	insertID := insertStock(stock)
-
-	res := response{
-		ID:      insertID,
-		Message: "Stock created successfully",
-	}
-
-	json.NewEncoder(w).Encode(res)
 }
 
 func GetStock(w http.ResponseWriter, r *http.Request) {
+	if ProtectedHandler(w, r) {
+		params := mux.Vars(r)
 
-	params := mux.Vars(r)
+		id, err := strconv.Atoi(params["id"])
 
-	id, err := strconv.Atoi(params["id"])
+		if err != nil {
+			log.Fatalf("Unable to convert the string into int. %v", err)
+		}
 
-	if err != nil {
-		log.Fatalf("Unable to convert the string into int. %v", err)
+		stock, err := getStock(int64(id))
+
+		if err != nil {
+			log.Fatalf("Unable to get stock. %v", err)
+		}
+
+		json.NewEncoder(w).Encode(stock)
 	}
-
-	stock, err := getStock(int64(id))
-
-	if err != nil {
-		log.Fatalf("Unable to get stock. %v", err)
-	}
-
-	json.NewEncoder(w).Encode(stock)
 }
 
 func GetAllStock(w http.ResponseWriter, r *http.Request) {
-	stocks, err := getAllStock()
+	if ProtectedHandler(w, r) {
+		stocks, err := getAllStock()
 
-	if err != nil {
-		log.Fatalf("Unable to get all the stocks %v", err)
+		if err != nil {
+			log.Fatalf("Unable to get all the stocks %v", err)
+		}
+
+		json.NewEncoder(w).Encode(stocks)
 	}
-
-	json.NewEncoder(w).Encode(stocks)
 
 }
 
 func UpdateStock(w http.ResponseWriter, r *http.Request) {
-	params := mux.Vars(r)
+	if ProtectedHandler(w, r) {
+		params := mux.Vars(r)
 
-	id, err := strconv.Atoi(params["id"])
+		id, err := strconv.Atoi(params["id"])
 
-	if err != nil {
-		log.Fatalf("Unable to convert string to int. %v", err)
+		if err != nil {
+			log.Fatalf("Unable to convert string to int. %v", err)
+		}
+
+		var stock models.Stock
+
+		err = json.NewDecoder(r.Body).Decode(&stock)
+
+		if err != nil {
+			log.Fatalf("Unable to decode to request body. %v", err)
+		}
+
+		updatedRows := updateStock(int64(id), stock)
+
+		msg := fmt.Sprintf("Stock updated seccessfully. Total rows/records affected %v", updatedRows)
+		res := response{
+			ID:      int64(id),
+			Message: msg,
+		}
+
+		json.NewEncoder(w).Encode(res)
 	}
-
-	var stock models.Stock
-
-	err = json.NewDecoder(r.Body).Decode(&stock)
-
-	if err != nil {
-		log.Fatalf("Unable to decode to request body. %v", err)
-	}
-
-	updatedRows := updateStock(int64(id), stock)
-
-	msg := fmt.Sprintf("Stock updated seccessfully. Total rows/records affected %v", updatedRows)
-	res := response{
-		ID:      int64(id),
-		Message: msg,
-	}
-
-	json.NewEncoder(w).Encode(res)
 }
 
 func DeleteStock(w http.ResponseWriter, r *http.Request) {
+	if ProtectedHandler(w, r) {
+		params := mux.Vars(r)
+		id, err := strconv.Atoi(params["id"])
+		if err != nil {
+			log.Fatalf("Unable to convert string to int. %v", err)
+		}
 
-	params := mux.Vars(r)
-	id, err := strconv.Atoi(params["id"])
-	if err != nil {
-		log.Fatalf("Unable to convert string to int. %v", err)
+		deletedRows := deleteStock(int64(id))
+
+		msg := fmt.Sprintf("Stock deleted successfully. Total rows/records %v", deletedRows)
+
+		res := response{
+			ID:      int64(id),
+			Message: msg,
+		}
+		json.NewEncoder(w).Encode(res)
 	}
-
-	deletedRows := deleteStock(int64(id))
-
-	msg := fmt.Sprintf("Stock deleted successfully. Total rows/records %v", deletedRows)
-
-	res := response{
-		ID:      int64(id),
-		Message: msg,
-	}
-	json.NewEncoder(w).Encode(res)
 }
 
 func insertStock(stock models.Stock) int64 {
@@ -273,4 +281,46 @@ func validateToken(tokenString string) error {
 		return fmt.Errorf("invalid token ")
 	}
 	return nil
+}
+
+func LoginHandler(w http.ResponseWriter, r *http.Request) {
+	w.Header().Set("Content-Type", "Application/json")
+
+	var u models.User
+	json.NewDecoder(r.Body).Decode(&u)
+	fmt.Printf("The request value %v", u)
+
+	if u.Username == "jonSnow" && u.Password == "11110000" {
+		tokenString, err := createToken(u.Username)
+		if err != nil {
+			w.WriteHeader(http.StatusInternalServerError)
+			fmt.Errorf("No username found")
+			return
+		}
+		w.WriteHeader(http.StatusOK)
+		fmt.Fprint(w, tokenString)
+		return
+	} else {
+		w.WriteHeader(http.StatusUnauthorized)
+		fmt.Fprint(w, "Invalid credentials")
+	}
+}
+
+func ProtectedHandler(w http.ResponseWriter, r *http.Request) bool {
+	w.Header().Set("Content-Type", "application-json")
+	tokenString := r.Header.Get("Authorization")
+	if tokenString == "" {
+		w.WriteHeader(http.StatusUnauthorized)
+		fmt.Fprint(w, "Missing authorization header")
+		return false
+	}
+	tokenString = tokenString[len("Bearer "):]
+
+	err := validateToken(tokenString)
+	if err != nil {
+		w.WriteHeader(http.StatusUnauthorized)
+		fmt.Fprint(w, "Invalid token")
+		return false
+	}
+	return true
 }

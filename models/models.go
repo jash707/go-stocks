@@ -6,3 +6,8 @@ type Stock struct {
 	Price   int64  `json:"price"`
 	Company string `json:"company"`
 }
+
+type User struct {
+	Username string `json:"username"`
+	Password string `json:"password"`
+}
