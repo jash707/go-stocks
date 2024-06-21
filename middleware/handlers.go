@@ -4,6 +4,7 @@ import (
 	"database/sql"
 	"encoding/json"
 	"fmt"
+	"go-postgres-stocks/auth"
 	"go-postgres-stocks/models"
 	"log"
 	"net/http"
@@ -45,99 +46,107 @@ func createConnection() *sql.DB {
 }
 
 func CreateStock(w http.ResponseWriter, r *http.Request) {
-	var stock models.Stock
+	if auth.ProtectedHandler(w, r) {
+		var stock models.Stock
 
-	err := json.NewDecoder(r.Body).Decode(&stock)
+		err := json.NewDecoder(r.Body).Decode(&stock)
 
-	if err != nil {
-		log.Fatalf("Unable to decode the request body. %v", err)
+		if err != nil {
+			log.Fatalf("Unable to decode the request body. %v", err)
+		}
+
+		insertID := insertStock(stock)
+
+		res := response{
+			ID:      insertID,
+			Message: "Stock created successfully",
+		}
+
+		json.NewEncoder(w).Encode(res)
 	}
-
-	insertID := insertStock(stock)
-
-	res := response{
-		ID:      insertID,
-		Message: "Stock created successfully",
-	}
-
-	json.NewEncoder(w).Encode(res)
 }
 
 func GetStock(w http.ResponseWriter, r *http.Request) {
+	if auth.ProtectedHandler(w, r) {
+		params := mux.Vars(r)
 
-	params := mux.Vars(r)
+		id, err := strconv.Atoi(params["id"])
 
-	id, err := strconv.Atoi(params["id"])
+		if err != nil {
+			log.Fatalf("Unable to convert the string into int. %v", err)
+		}
 
-	if err != nil {
-		log.Fatalf("Unable to convert the string into int. %v", err)
+		stock, err := getStock(int64(id))
+
+		if err != nil {
+			log.Fatalf("Unable to get stock. %v", err)
+		}
+
+		json.NewEncoder(w).Encode(stock)
 	}
-
-	stock, err := getStock(int64(id))
-
-	if err != nil {
-		log.Fatalf("Unable to get stock. %v", err)
-	}
-
-	json.NewEncoder(w).Encode(stock)
 }
 
 func GetAllStock(w http.ResponseWriter, r *http.Request) {
-	stocks, err := getAllStock()
+	if auth.ProtectedHandler(w, r) {
+		stocks, err := getAllStock()
 
-	if err != nil {
-		log.Fatalf("Unable to get all the stocks %v", err)
+		if err != nil {
+			log.Fatalf("Unable to get all the stocks %v", err)
+		}
+
+		json.NewEncoder(w).Encode(stocks)
 	}
-
-	json.NewEncoder(w).Encode(stocks)
 
 }
 
 func UpdateStock(w http.ResponseWriter, r *http.Request) {
-	params := mux.Vars(r)
+	if auth.ProtectedHandler(w, r) {
+		params := mux.Vars(r)
 
-	id, err := strconv.Atoi(params["id"])
+		id, err := strconv.Atoi(params["id"])
 
-	if err != nil {
-		log.Fatalf("Unable to convert string to int. %v", err)
+		if err != nil {
+			log.Fatalf("Unable to convert string to int. %v", err)
+		}
+
+		var stock models.Stock
+
+		err = json.NewDecoder(r.Body).Decode(&stock)
+
+		if err != nil {
+			log.Fatalf("Unable to decode to request body. %v", err)
+		}
+
+		updatedRows := updateStock(int64(id), stock)
+
+		msg := fmt.Sprintf("Stock updated seccessfully. Total rows/records affected %v", updatedRows)
+		res := response{
+			ID:      int64(id),
+			Message: msg,
+		}
+
+		json.NewEncoder(w).Encode(res)
 	}
-
-	var stock models.Stock
-
-	err = json.NewDecoder(r.Body).Decode(&stock)
-
-	if err != nil {
-		log.Fatalf("Unable to decode to request body. %v", err)
-	}
-
-	updatedRows := updateStock(int64(id), stock)
-
-	msg := fmt.Sprintf("Stock updated seccessfully. Total rows/records affected %v", updatedRows)
-	res := response{
-		ID:      int64(id),
-		Message: msg,
-	}
-
-	json.NewEncoder(w).Encode(res)
 }
 
 func DeleteStock(w http.ResponseWriter, r *http.Request) {
+	if auth.ProtectedHandler(w, r) {
+		params := mux.Vars(r)
+		id, err := strconv.Atoi(params["id"])
+		if err != nil {
+			log.Fatalf("Unable to convert string to int. %v", err)
+		}
 
-	params := mux.Vars(r)
-	id, err := strconv.Atoi(params["id"])
-	if err != nil {
-		log.Fatalf("Unable to convert string to int. %v", err)
+		deletedRows := deleteStock(int64(id))
+
+		msg := fmt.Sprintf("Stock deleted successfully. Total rows/records %v", deletedRows)
+
+		res := response{
+			ID:      int64(id),
+			Message: msg,
+		}
+		json.NewEncoder(w).Encode(res)
 	}
-
-	deletedRows := deleteStock(int64(id))
-
-	msg := fmt.Sprintf("Stock deleted successfully. Total rows/records %v", deletedRows)
-
-	res := response{
-		ID:      int64(id),
-		Message: msg,
-	}
-	json.NewEncoder(w).Encode(res)
 }
 
 func insertStock(stock models.Stock) int64 {
