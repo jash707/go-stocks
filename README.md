@@ -6,11 +6,6 @@ This is a simple Stocks API implemented in Golang that supports CRUD (Create, Re
 
 - [Features](#features)
 - [Installation](#installation)
-- [Usage](#usage)
-- [API Endpoints](#api-endpoints)
-- [Project Structure](#project-structure)
-- [Contributing](#contributing)
-- [License](#license)
 
 ## Features
 
